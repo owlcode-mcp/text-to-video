@@ -1,0 +1,19 @@
+# Core AI/ML dependencies
+diffusers>=0.30.0
+transformers>=4.44.0
+torch>=2.0.0
+accelerate>=0.33.0
+
+# Video processing
+imageio>=2.34.0
+imageio-ffmpeg>=0.5.1
+opencv-python>=4.9.0
+
+# Optimization (optional, for quantization)
+optimum>=1.21.0
+bitsandbytes>=0.43.0
+
+# Utilities
+tqdm>=4.66.0
+pillow>=10.0.0
+numpy>=1.24.0
