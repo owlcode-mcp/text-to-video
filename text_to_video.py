@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import imageio
 import torch
+from ftplib import FTP
 from diffusers import CogVideoXPipeline
 from diffusers.utils import export_to_video
 
@@ -179,7 +180,7 @@ class FTPUploader:
 
     def upload(self, local_path, remote_filename=None):
         """
-        Upload file to FTP server using MCP
+        Upload file to FTP server
 
         Args:
             local_path: Path to local file
@@ -195,22 +196,74 @@ class FTPUploader:
 
         print(f"\nUploading to FTP: {remote_path}")
 
+        # Check if FTP is configured
+        if not self.host or not self.user:
+            print("WARNING: FTP not configured. Set FTP_HOST, FTP_USER, FTP_PASSWORD environment variables.")
+            print(f"Video saved locally at: {local_path}")
+            return None
+
         try:
-            # Read file content
+            file_size = os.path.getsize(local_path)
+            print(f"File size: {utils.format_filesize(file_size)}")
+            print(f"Connecting to {self.host}:{self.port}...")
+
+            # Connect to FTP server
+            ftp = FTP()
+            ftp.connect(self.host, self.port)
+            ftp.login(self.user, self.password)
+
+            print("Connected successfully!")
+
+            # Create remote directory if it doesn't exist
+            try:
+                ftp.cwd(self.remote_dir)
+            except:
+                print(f"Creating remote directory: {self.remote_dir}")
+                # Try to create directory (may fail if parent doesn't exist)
+                try:
+                    ftp.mkd(self.remote_dir)
+                    ftp.cwd(self.remote_dir)
+                except:
+                    # If mkd fails, try changing to root and creating
+                    dirs = self.remote_dir.strip('/').split('/')
+                    for d in dirs:
+                        try:
+                            ftp.cwd(d)
+                        except:
+                            ftp.mkd(d)
+                            ftp.cwd(d)
+
+            # Upload file with progress
+            print(f"Uploading {remote_filename}...")
+
+            uploaded_bytes = [0]
+
+            def callback(data):
+                uploaded_bytes[0] += len(data)
+                percent = (uploaded_bytes[0] / file_size) * 100
+                print(f"  Progress: {percent:.1f}% ({utils.format_filesize(uploaded_bytes[0])}/{utils.format_filesize(file_size)})", end='\r')
+
             with open(local_path, 'rb') as f:
-                content = f.read()
+                ftp.storbinary(f'STOR {remote_filename}', f, callback=callback)
 
-            print(f"File size: {utils.format_filesize(len(content))}")
-            print("Upload will be handled by MCP FTP tool...")
-            print(f"Remote path: {remote_path}")
+            print()  # New line after progress
+            print(f"✓ Upload complete!")
 
-            # Note: Actual upload will be done via MCP tool call
-            # This is a placeholder that will be replaced with MCP integration
+            # Verify upload
+            file_list = ftp.nlst()
+            if remote_filename in file_list:
+                print(f"✓ File verified on server: {remote_path}")
+            else:
+                print("⚠ Warning: Could not verify file on server")
+
+            ftp.quit()
+
             return remote_path
 
         except Exception as e:
             print(f"Error uploading to FTP: {e}")
-            raise
+            print(f"Video saved locally at: {local_path}")
+            return None
 
 
 def main():
