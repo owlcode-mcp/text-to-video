@@ -2,7 +2,11 @@
 Configuration module for text-to-video generation
 """
 import os
-import torch
+
+try:
+    import torch
+except ImportError:
+    torch = None
 
 # Model configurations
 MODELS = {
@@ -45,6 +49,8 @@ FTP_REMOTE_DIR = os.getenv('FTP_REMOTE_DIR', '/videos')
 
 def detect_device():
     """Detect available compute device"""
+    if torch is None:
+        return 'cpu'
     if torch.cuda.is_available():
         return 'cuda'
     elif torch.backends.mps.is_available():
@@ -54,6 +60,8 @@ def detect_device():
 
 def get_available_vram():
     """Get available VRAM in GB"""
+    if torch is None:
+        return 0
     if torch.cuda.is_available():
         return torch.cuda.get_device_properties(0).total_memory / (1024**3)
     return 0
