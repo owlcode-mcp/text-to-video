@@ -48,22 +48,43 @@ FTP_PASSWORD = os.getenv('FTP_PASSWORD', '')
 FTP_REMOTE_DIR = os.getenv('FTP_REMOTE_DIR', '/videos')
 
 def detect_device():
-    """Detect available compute device"""
+    """Detect available compute device with M1/M2 optimization"""
     if torch is None:
         return 'cpu'
-    if torch.cuda.is_available():
+
+    # Check for Apple Silicon MPS (Metal Performance Shaders) first
+    # MPS is optimized for M1/M2/M3 chips
+    if torch.backends.mps.is_available():
+        try:
+            # Verify MPS is actually working
+            test_tensor = torch.zeros(1, device='mps')
+            return 'mps'
+        except Exception:
+            print("Warning: MPS available but not functional, falling back to CPU")
+            return 'cpu'
+    elif torch.cuda.is_available():
         return 'cuda'
-    elif torch.backends.mps.is_available():
-        return 'mps'
     else:
         return 'cpu'
 
 def get_available_vram():
-    """Get available VRAM in GB"""
+    """Get available VRAM/Unified Memory in GB"""
     if torch is None:
         return 0
+
     if torch.cuda.is_available():
         return torch.cuda.get_device_properties(0).total_memory / (1024**3)
+    elif torch.backends.mps.is_available():
+        # M1/M2 uses unified memory - estimate based on system RAM
+        # Typically safe to use up to 70% of system RAM for MPS
+        import psutil
+        try:
+            total_ram = psutil.virtual_memory().total / (1024**3)
+            # Estimate available for MPS (conservative estimate)
+            return total_ram * 0.5
+        except:
+            # Conservative fallback for M1 with 8GB
+            return 6.0
     return 0
 
 def should_use_quantization():

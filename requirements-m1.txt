@@ -1,0 +1,32 @@
+# Apple M1/M2 Silicon optimized requirements
+# Install with: pip install -r requirements-m1.txt
+
+# Core AI/ML dependencies - M1 optimized
+# Use PyTorch with MPS (Metal Performance Shaders) support
+torch>=2.0.0
+diffusers>=0.30.0
+transformers>=4.44.0
+accelerate>=0.33.0
+sentencepiece>=0.1.99
+protobuf>=3.20.0
+
+# Video processing
+imageio>=2.34.0
+imageio-ffmpeg>=0.5.1
+opencv-python>=4.9.0
+
+# M1 optimization libraries
+# These are automatically optimized for Apple Silicon
+optimum>=1.21.0
+
+# Utilities
+tqdm>=4.66.0
+pillow>=10.0.0
+numpy>=1.24.0
+
+# Note: For best M1 performance:
+# 1. Use Python from python.org (not Homebrew) or miniforge
+# 2. Ensure you're using arm64 native Python (not Rosetta)
+# 3. PyTorch will automatically use MPS backend on M1/M2
+# 4. Run: python -c "import torch; print(torch.backends.mps.is_available())"
+#    Should return True for MPS support

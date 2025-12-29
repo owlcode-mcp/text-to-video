@@ -11,6 +11,14 @@ import numpy as np
 import imageio
 import torch
 from ftplib import FTP
+
+# Fix T5 tokenizer lazy loading issue
+# Import tokenizer explicitly before pipeline
+try:
+    from transformers import T5EncoderModel, T5Tokenizer
+except ImportError:
+    print("Warning: transformers not fully installed")
+
 from diffusers import CogVideoXPipeline
 from diffusers.utils import export_to_video
 
@@ -31,21 +39,39 @@ class VideoGenerator:
         print(f"Device: {self.device}")
 
     def load_model(self):
-        """Load the video generation model"""
+        """Load the video generation model with M1/M2 optimization"""
         print(f"\nLoading model: {self.model_config['repo_id']}")
         print("This may take a few minutes on first run...")
 
         try:
-            # Load pipeline
+            # Determine dtype based on device
+            if self.device == 'cuda':
+                dtype = torch.float16
+            elif self.device == 'mps':
+                # M1/M2: Use float16 for better performance
+                dtype = torch.float16
+                print("Using Apple MPS (Metal) backend for M1/M2 acceleration")
+            else:
+                dtype = torch.float32
+
+            # Load pipeline with explicit tokenizer to avoid lazy loading issues
+            print("Loading tokenizer...")
+            from transformers import T5Tokenizer
+            tokenizer = T5Tokenizer.from_pretrained(
+                self.model_config['repo_id'],
+                subfolder="tokenizer"
+            )
+
+            print("Loading pipeline...")
             self.pipe = CogVideoXPipeline.from_pretrained(
                 self.model_config['repo_id'],
-                torch_dtype=torch.float16 if self.device == 'cuda' else torch.float32,
+                torch_dtype=dtype,
+                tokenizer=tokenizer,
             )
 
             # Optimize for available hardware
             if self.device == 'cuda':
                 self.pipe.to('cuda')
-
                 # Enable memory optimizations
                 self.pipe.enable_model_cpu_offload()
                 self.pipe.enable_sequential_cpu_offload()
@@ -55,6 +81,24 @@ class VideoGenerator:
                     print("Applying quantization for low VRAM...")
                     # Note: Quantization would require additional setup
                     # For now, we rely on CPU offloading
+
+            elif self.device == 'mps':
+                # M1/M2 optimization
+                print("Optimizing for Apple Silicon...")
+                self.pipe.to('mps')
+
+                # Enable attention slicing for memory efficiency on M1
+                self.pipe.enable_attention_slicing(1)
+
+                # Enable VAE slicing for better memory usage
+                if hasattr(self.pipe, 'enable_vae_slicing'):
+                    self.pipe.enable_vae_slicing()
+
+                print("✓ M1/M2 optimizations enabled")
+                print("  - Using Metal Performance Shaders")
+                print("  - Attention slicing enabled")
+                print("  - VAE slicing enabled")
+
             else:
                 print("WARNING: Running on CPU will be very slow (30+ minutes per video)")
                 self.pipe.to('cpu')
